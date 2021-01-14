@@ -50,13 +50,13 @@ impl Client {
          params: T,
     ) -> RedisResult<Client> {
         let connection_info = params.into_connection_info()?;
-        let sentinel_client = Client {
+        let mut sentinel_client = Client {
             connection_info: connection_info.clone(),
         };
         let (master_addr, master_port): (String, u16) = crate::cmd("SENTINEL")
             .arg("get-master-addr-by-name")
             .arg(master_group_name)
-            .query(&sentinel_client)?;
+            .query(&mut sentinel_client)?;
 
         Ok(Client {
             connection_info: ConnectionInfo {
