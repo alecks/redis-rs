@@ -4,7 +4,7 @@ use std::time::Duration;
 use std::pin::Pin;
 
 use crate::{
-    connection::{connect, Connection, ConnectionInfo, ConnectionLike, IntoConnectionInfo},
+    connection::{connect, Connection, ConnectionAddr, ConnectionInfo, ConnectionLike, IntoConnectionInfo},
     types::{RedisResult, Value},
 };
 
@@ -39,6 +39,33 @@ impl Client {
             connection_info: params.into_connection_info()?,
         })
     }
+    
+    /// Connects to a redis-server in sentinel mode (used in redis clusters) and
+    /// return a client pointing to the current master.
+    /// This opens a short-lived connection to the sentinal server but does not open
+    /// yet a connection to the master.
+    /// https://github.com/mitsuhiko/redis-rs/pull/199
+    pub fn open_with_sentinel<T: IntoConnectionInfo>(
+         master_group_name: &str,
+         params: T,
+    ) -> RedisResult<Client> {
+        let connection_info = params.into_connection_info()?;
+        let sentinel_client = Client {
+            connection_info: connection_info.clone(),
+        };
+        let (master_addr, master_port): (String, u16) = crate::cmd("SENTINEL")
+            .arg("get-master-addr-by-name")
+            .arg(master_group_name)
+            .query(&sentinel_client)?;
+
+        Ok(Client {
+            connection_info: ConnectionInfo {
+                addr: Box::new(ConnectionAddr::Tcp(master_addr, master_port)),
+                ..connection_info
+            },
+        })
+    }
+
 
     /// Instructs the client to actually connect to redis and returns a
     /// connection object.  The connection object can be used to send
